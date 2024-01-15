@@ -29,7 +29,7 @@ res_list <- lapply(hypertribe_results, fread)
 write.xlsx(res_list, file = "analyses/HyperTRIBE/01_HyperTRIBER_TAIR10/All_versus.HyperTRIBER.results.xlsx")
 
 # Put everyting in a table with a new column versus
-res <- rbindlist(res, idcol = "Versus")
+res <- rbindlist(res_list, idcol = "Versus")
 
 # Create a new column for the position of the editing site from the name column --> Chr1_32658,-
 res[, c("gene_id", "start", "end", "width", "strand") := NULL]
