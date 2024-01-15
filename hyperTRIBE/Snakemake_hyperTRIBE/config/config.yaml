@@ -1,0 +1,26 @@
+# Sample table path. Must be .csv or .xlsx and should have at least 2 columns named "Sample Name" and "Library"
+# Library should math the name of you raw reads without the extension
+# for example if "DNGC70.R1.fastq.gz" is your raw reads file, the library name should be "DNGC70"
+sample_table: Sample_Names_TRIBE.xlsx
+
+# Where to store all the output files
+outdir: "/Project/TRIBEseq_analysis/"
+
+# Your raw data directory. Must be a directory containing paired-end {R1|R2}.fastq.gz files
+rawdata_dir: "/data/TRIBEseq/0_RawData/NGS287-TRIBEseq/rawdata/220701"
+
+# Your paired-end reads extension after LIBRARY_NAME. 
+# Put here the whole R1 file extension. 
+# generally "_R1.fastq.gz" or "_R1.fastq.gz". It will be used to find R2 files.
+extension: ".R1.fastq.gz"
+
+runs_dir: "1_Runs"
+mapping_dir: "2_Mapping"
+results_dir: "3_Results"
+genome_dir: "ReferenceGenome"
+ 
+reference:
+    genome: "/Genomes/Arabidopsis_thaliana/Araport11/TAIR10_Chr.all.fasta" # Reference genome in fasta
+    
+## hisat2 mapping options
+hisat2_options: "-t -k 50 --max-intronlen 2000 --rna-strandness RF --no-unal --rg LB:2x100bp_RF_stranded --rg PL:Illumina_HiSeq_4000 --rg PU:Arabidopsis_thaliana"

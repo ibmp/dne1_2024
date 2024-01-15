@@ -1,0 +1,181 @@
+from snakemake.utils import min_version
+from pathlib import Path
+import pandas as pd
+
+min_version("7.0")
+
+configfile: "../config/config.yaml"
+include: "rules/common.smk"
+
+if config["sample_table"].endswith(".xlsx"):
+    sample_table = pd.read_excel(config["sample_table"])
+elif config["sample_table"].endswith(".csv"):
+    sample_table = pd.read_csv(config["sample_table"])
+else:
+    raise ValueError("The sample_table must be an Excel (.xlsx) or CSV file (.csv)")
+
+name2id = dict(zip(sample_table["Sample Name"], sample_table["Library"]))
+print(name2id)
+
+workdir: OUTDIR
+
+SAMPLES, = glob_wildcards(RAWDATA_DIR / f"{{sample}}{config['extension']}")
+FILENAMES, = glob_wildcards(RAWDATA_DIR / '{filename, .*(.fastq.gz)$}')
+print(SAMPLES, FILENAMES)
+
+localrules: reference, samtools_faidx
+
+rule all:
+    input:
+       #fastqc =  expand(RUNS_DIR / "{sample}.{rep}_fastqc.html", sample=SAMPLES, rep = ["R1", "R2"]),
+       index = (GENOME_DIR / GENOME.name).with_suffix(".1.ht2"),
+       bams = expand(MAPPING_DIR / "{sample}.bam", sample=name2id.keys()),
+       stranded_bams = expand(MAPPING_DIR / "{sample}{strand}.bam", sample=name2id.keys(), strand = ["_fwd", "_rev"]),
+       #pileup = RESULTS_DIR / "all_samples.mpileup",
+       #res = RESULTS_DIR / "all_samples.mpileup.stranded.basecounts.sorted.txt"
+
+rule fastqc:
+    input:
+       RAWDATA_DIR / "{sample}.{rep}.fastq.gz"
+    output:
+        html = RUNS_DIR / "{sample}.{rep}_fastqc.html"
+    params: "--quiet"
+    conda: "envs/hypertribeseq.yaml"
+    threads: 2
+    shell:
+        "fastqc -t {threads} {input} -o {RUNS_DIR} {params}"
+
+rule reference:
+    input: 
+        genome = GENOME,
+    output: 
+        symlink_genome = GENOME_DIR / GENOME.name,
+    message: """--- Creating symlink ---"""
+    shell: 
+        """
+        ln -s {input.genome} {output.symlink_genome}
+        """
+
+rule samtools_faidx: 
+    input: rules.reference.output.symlink_genome
+    output: 
+        faidx = GENOME_DIR / (GENOME.name + ".fai")
+    message: """--- Indexing genome ---"""
+    conda: "envs/hypertribeseq.yaml"
+    shell: 
+        """
+        samtools faidx {input}
+        """
+
+rule hisat2_index_genome:
+    input: rules.reference.output.symlink_genome
+    output: (GENOME_DIR / GENOME.name).with_suffix(".1.ht2") # One of the files created by hisat2-build 
+    params: (GENOME_DIR / GENOME.name).with_suffix("") # name without extension for hisat2-build
+    message: """--- Hisat2 indexing step ---"""
+    threads: 4
+    conda: "envs/hypertribeseq.yaml"
+    shell:
+        """
+        hisat2-build -p {threads} {input} {params}
+        """
+
+rule hisat2:
+    input:
+        fastq1 = lambda wc: RAWDATA_DIR / (name2id[wc.sample] + ".R1.fastq.gz"),
+        fastq2 = lambda wc: RAWDATA_DIR / (name2id[wc.sample] + ".R2.fastq.gz"),
+        index = rules.hisat2_index_genome.output
+    output:
+        bam = MAPPING_DIR / "{sample}.bam",
+        bai = MAPPING_DIR / "{sample}.bam.bai",
+        summary = MAPPING_DIR / "{sample}.summary.txt"
+    params:
+        index = rules.hisat2_index_genome.params,
+        rg_id = lambda wc: f"--rg-id {name2id[wc.sample]}",
+        rg = "--rg SM:{sample}",
+        add_opts = config["hisat2_options"]
+    threads: 4
+    conda: "envs/hypertribeseq.yaml"
+    resources:
+        mem_mb = "12G",
+        tmpdir = str(MAPPING_DIR.resolve())
+    shell:
+        """
+        hisat2 {params.add_opts} {params.rg_id} {params.rg} -p {threads} -x {params.index} -1 {input.fastq1} -2 {input.fastq2} --summary-file {output.summary} --new-summary | samtools sort -@ {threads} -o {output.bam}
+        samtools index {output.bam}
+        """
+
+rule hisat2_split_strand:
+    input:
+        bam = MAPPING_DIR / "{sample}.bam",
+    output: 
+        fwd1 = temp(MAPPING_DIR / "{sample}_fwd1.bam"),
+        fwd2 = temp(MAPPING_DIR / "{sample}_fwd2.bam"),
+        rev1 = temp(MAPPING_DIR / "{sample}_rev1.bam"),
+        rev2 = temp(MAPPING_DIR / "{sample}_rev2.bam"),
+        merged_fwd = MAPPING_DIR / "{sample}_fwd.bam",
+        merged_rev = MAPPING_DIR / "{sample}_rev.bam"
+    conda: "envs/hypertribeseq.yaml"
+    resources:
+        mem_mb = "12G",
+        tmpdir = str(MAPPING_DIR.resolve())
+    threads: 4
+    shell:
+        """
+        samtools view -bh -f 99 {input.bam} > {output.fwd1}
+        samtools index {output.fwd1}
+
+        samtools view -bh -f 147 {input.bam} > {output.fwd2}
+        samtools index {output.fwd2}
+
+        samtools merge -o {output.merged_fwd} {output.fwd1} {output.fwd2}
+        samtools index {output.merged_fwd}
+
+        samtools view -bh -f 83 {input.bam} > {output.rev1}
+        samtools index {output.rev1}
+
+        samtools view -bh -f 163 {input.bam} > {output.rev2}
+        samtools index {output.rev2}
+
+        samtools merge -o {output.merged_rev} {output.rev1} {output.rev2}
+        samtools index {output.merged_rev}
+        """
+
+# rule samtools_mpileup:
+#     input: 
+#         bams = rules.all.input.bams,
+#         faidx = rules.samtools_faidx.output.faidx,
+#         fasta = rules.reference.output.symlink_genome
+#     output: 
+#         RESULTS_DIR / "all_samples.mpileup"
+#     params:
+#         tmp_dir = directory(RESULTS_DIR / "tmp"),
+#         add_opts = "--max-depth 10000 -Q 30 --skip-indels"
+#     message: "Running samtools mpileup command on all bam files"
+#     conda: "envs/hypertribeseq.yaml"
+#     threads: 7
+#     shell:
+#         """
+#         mkdir -p {params.tmp_dir}
+#         #samtools mpileup {params} -f {input.faidx} {input.bams} -o {output}
+#         #parallel -k --colsep '\\t' samtools mpileup {params.add_opts} -f {input.fasta} -r {{1}} {input.bams} :::: {input.faidx} > {output}
+#         parallel -k --colsep '\\t' samtools mpileup --tmpdir {params.tmp_dir} {params.add_opts} -f {input.fasta} -r {{1}} {input.bams} :::: {input.faidx} > {output}
+#         """
+
+rule hypertribe_mpileup:
+    input: rules.samtools_mpileup.output
+    output: RESULTS_DIR / "all_samples.mpileup.stranded.basecounts.txt"
+    conda: "envs/hypertribeseq.yaml"
+    threads: 40
+    shell:
+        """
+        #parallel -j 40 --block-size 500M --keep --pipepart perl scripts/RNAeditR_mpileup2bases_stranded.pl :::: {input} > {output}
+        parallel -j 40 --block-size 500M --keep --pipepart perl scripts/RNAeditR_mpileup2bases.pl :::: {input} > {output}
+        """
+
+# rule sort_output:
+#     input: rules.hypertribe_mpileup.output
+#     output: RESULTS_DIR / "all_samples.mpileup.stranded.basecounts.sorted.txt"
+#     shell:
+#         """
+#         sort -k1,1 -k2,2n {input} > {output}
+#         """

@@ -1,0 +1,279 @@
+---
+title: "Manipulate shortstack_data"
+author: "Garcia D"
+date: "2/17/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#set wd
+
+```{r}
+setwd("/Users/dgarcia/Labo_IBMP/Sequencing/RNA-seq2021_its1_dne1/S21217_siRNAseq/siRNAseq_analysis/Shortstack")
+getwd()
+```
+
+## Filter data
+
+We are going to need the following packages
+
+###R
+```{r}
+library(dplyr) # help splitting, applying and combining data
+library(plyr) # help for data manipulation
+library(data.table) # extension to data.frame format, optimized for huge datasets
+library(ggplot2) # The grammar of graphics, it improves the quality and aesthetic of your graphs
+```
+
+###fread shortstack
+Load them with the fread command (?fread). It is an optimized version of read.table
+ShortStack mapping results for each sample
+
+```{r}
+WT <- fread("merged_Col_shortstack/Results_merged_Col.txt", header = T)
+dcp2 <- fread("merged_dcp2_shortstack/Results.txt", header = T)
+dne1_2 <- fread("merged_dne1_2_shortstack/Results.txt", header = T)
+dne1_3 <- fread("merged_dne1_3_shortstack/Results.txt", header = T)
+dne1_3_dcp2 <- fread("merged_dne1_3_dcp2_shortstack/Results.txt", header = T)
+dne1_2_dcp2 <- fread("merged_dne1_2_dcp2_shortstack/Results.txt", header = T)
+xrn4 <- fread("merged_xrn4_shortstack/Results_merged_xrn4.txt", header = T)
+```
+
+###combining
+We have to add a column to differentiate the files before combining them
+```{r}
+WT[, Sample := "WT"]
+dcp2[, Sample := "dcp2"]
+dne1_2[, Sample := "dne1_2"]
+dne1_3[, Sample := "dne1_3"]
+dne1_2_dcp2[, Sample := "dne1_2_dcp2"]
+dne1_3_dcp2[, Sample := "dne1_3_dcp2"]
+xrn4[, Sample := "xrn4"]
+
+```
+
+
+If the tables have the same number of columns, we can concatenate them by row with the rbindlist function
+Let's combine the tables together
+```{r}
+?rbindlist
+shortstack.data <- rbindlist(list(WT, dcp2, dne1_2,dne1_3,dne1_2_dcp2,dne1_3_dcp2,xrn4))
+
+View(shortstack.data)
+```
+
+###Select columns
+It is really easy with the select columns in our data function_ ?select
+```{r}
+shortstack.subset1 <- dplyr::select(shortstack.data, Sample, Name, Length, Reads, DicerCall, "20", "21", "22", "23", "24")
+```
+
+# Get annotations
+of the shortstack subset with the type ie genes TE pseudogenes miRNA 
+```{r}
+#import the gene annotation and transform it to a data table
+gtf <- import("~/Araport11_GTF_genes_transposons.Jan032022_DG.gtf")
+gtf.dt <- as.data.table(gtf)
+```
+
+##Make type sublists
+```{r}
+#Select the genes/te/pseudo/miRNA in the gene annotation datatable and make lists of genes te pseudogenes miRNA
+genes <- dplyr::select(gtf.dt[type == "gene"], gene_id, type)
+te <- dplyr::select(gtf.dt[type == "transposable_element"], gene_id, type)
+pseudo <- dplyr::select(gtf.dt[type == "pseudogene"], gene_id, type)
+mirna <- dplyr::select(gtf.dt[type == "miRNA"], gene_id, type)
+```
+
+##create type column
+```{r}
+#in shortstack.subset1 select the names present in genes$gene_id and create a new column type to assign each annotation to gene etc for the other types
+
+shortstack.subset1[Name %in% genes$gene_id, type := "gene"]
+shortstack.subset1[Name %in% te$gene_id, type := "TE"]
+shortstack.subset1[Name %in% pseudo$gene_id, type := "pseudogene"]
+shortstack.subset1[Name %in% mirna$gene_id, type := "miRNA"]
+
+# we have corrected a mistake in the GFT file for the gene AT1G19570 now it is OK
+shortstack.subset1[is.na(type)]
+"AT1G19570" %in% genes$gene_id
+```
+
+##export table
+```{R 'Export table of results'}
+write.table(shortstack.subset1, "Shortstack_subset1.txt", row.names=FALSE, sep="\t", quote=FALSE)
+
+```
+
+#xrn4
+```{r}
+#create a new column type to assign each annotation to gene etc for each subsets
+
+xrn4[Name %in% genes$gene_id, type := "gene"]
+xrn4[Name %in% te$gene_id, type := "TE"]
+xrn4[Name %in% pseudo$gene_id, type := "pseudogene"]
+xrn4[Name %in% mirna$gene_id, type := "miRNA"]
+```
+
+##Import lists of deregulated sRNA loci in different genotypes and add shortstack info
+```{r 'import upregulated loci'}
+xrn4_up<-fread("/Users/dgarcia/Labo_IBMP/Sequencing/RNA-seq2021_its1_dne1/S21217_siRNAseq/siRNAseq_analysis/DEseq2/sRNAseq_corrected/xrn4_up.csv")
+xrn4_down<-fread("/Users/dgarcia/Labo_IBMP/Sequencing/RNA-seq2021_its1_dne1/S21217_siRNAseq/siRNAseq_analysis/DEseq2/sRNAseq_corrected/xrn4_down.csv")
+```
+
+```{r 'select loci up in xrn4 with shortstack data'}
+xrn4_up_shortstack <- dplyr::select(xrn4[Name %in% xrn4_up$xrn4_up,], Name, Length, Reads, DicerCall, "20", "21", "22", "23", "24", type)
+xrn4_down_shortstack <- dplyr::select(xrn4[Name %in% xrn4_down$xrn4_down,], Name, Length, Reads, DicerCall, "20", "21", "22", "23", "24", type)
+```
+
+```{r}
+ggplot(xrn4_up_shortstack, aes(x = DicerCall)) + geom_density()
+ggplot(xrn4_down_shortstack, aes(x = DicerCall)) + geom_density()
+```
+```{r}
+ggplot(xrn4_up_shortstack, aes(x = DicerCall)) + geom_histogram() + ggtitle("xrn4 sRNA up") + ylab("sRNA count")
+ggplot(xrn4_down_shortstack, aes(x = DicerCall)) + geom_histogram() + ggtitle("xrn4 sRNA down") + ylab("sRNA count")
+```
+
+#different types of annotations for xrn4 sRNA
+```{r}
+# [, = selectionner toutes les lignes .N = nombre d'observation , by=type pour selectionner par type
+count_xrn4_up <- xrn4_up_shortstack[, .(count = .N), by = type]
+count_xrn4_down <- xrn4_down_shortstack[, .(count = .N), by = type]
+
+ggplot(count_xrn4_down, aes(x = type, y = count, fill = type)) + geom_col() + theme_bw() + ggtitle("xrn4 sRNA down") + ylab("sRNA count") + xlab("type")
+ggplot(count_xrn4_up, aes(x = type, y = count, fill = type)) + geom_col() + theme_bw() + ggtitle("xrn4 sRNA up") + ylab("sRNA count") + xlab("type")
+```
+#make tmp intermediate with 1column and column to melt + use melt() function to produce a table in the long format compatible with ggplot
+```{r}
+xrn4_up_tmp <- dplyr::select(xrn4_up_shortstack, "type", "20", "21", "22", "23", "24")
+xrn4_up_tmp.m <- data.table::melt(xrn4_up_tmp, variable.name = "size_sRNA", value.name =  "count_sRNA")
+
+xrn4_down_tmp <- dplyr::select(xrn4_down_shortstack, "type", "20", "21", "22", "23", "24")
+xrn4_down_tmp.m <- data.table::melt(xrn4_down_tmp, variable.name = "size_sRNA", value.name =  "count_sRNA")
+```
+
+```{r}
+ggplot(xrn4_up_tmp.m, aes(x=factor(1), fill=type))+
+  geom_bar(width = 1)+
+  coord_polar("y") + ggtitle("xrn4 sRNA up") + ylab("sRNA count") + xlab(".")
+ggplot(xrn4_down_tmp.m, aes(x=factor(1), fill=type))+
+  geom_bar(width = 1)+
+  coord_polar("y") + ggtitle("xrn4 sRNA down") + ylab("sRNA count") + xlab(".")
+```
+
+
+#use ggplot to produce graphs showing the data
+```{r, log2(number of sRNAs per sizes) for xrn4 upregulated loci }
+ggplot(xrn4_down_tmp.m, aes(size_sRNA, log2(count_sRNA + 1), fill = size_sRNA)) + geom_boxplot()+ ggtitle("xrn4 sRNA down") + ylab("log2 (sRNA count + 1)") + xlab("sRNA size")
+ggplot(xrn4_up_tmp.m, aes(size_sRNA, log2(count_sRNA + 1), fill = size_sRNA)) + geom_boxplot()+ ggtitle("xrn4 sRNA up") + ylab("log2 (sRNA count + 1)") + xlab("sRNA size")
+```
+
+
+```{r}
+ggplot(xrn4_down_tmp.m, aes(log2(count_sRNA +1), color = size_sRNA)) + geom_density() + ggtitle("xrn4 sRNA down")
+ggplot(xrn4_up_tmp.m, aes(log2(count_sRNA +1), color = size_sRNA)) + geom_density() + ggtitle("xrn4 sRNA up")
+```
+
+
+```{r}
+xrn4_up_tmp.1 <- xrn4_up_tmp.m[, .(sum = sum(count_sRNA)), by = c("size_sRNA", "type")]
+xrn4_down_tmp.1 <- xrn4_down_tmp.m[, .(sum = sum(count_sRNA)), by = c("size_sRNA", "type")]
+
+ggplot(xrn4_down_tmp.1, aes(x = size_sRNA, y = sum, fill = size_sRNA)) + geom_col(position = "dodge") + theme_bw()+ ggtitle("xrn4 sRNA down") + ylab("sRNA count") + xlab("sRNA size")
+ggplot(xrn4_up_tmp.1, aes(x = size_sRNA, y = sum, fill = size_sRNA)) + geom_col(position = "dodge") + theme_bw()+ ggtitle("xrn4 sRNA up") + ylab("sRNA count") + xlab("sRNA size")
+
+```
+```{r}
+ggplot(xrn4_down_tmp.1, aes(x = size_sRNA, y = sum, fill = size_sRNA)) + geom_col(position = "dodge") + theme_bw() + facet_wrap(~type, ncol  =4) + ggtitle("xrn4 sRNA down") + ylab("sRNA count") + xlab("sRNA size")
+
+ggplot(xrn4_up_tmp.1, aes(x = size_sRNA, y = sum, fill = size_sRNA)) + geom_col(position = "dodge") + theme_bw() + facet_wrap(~type, ncol  =3) + ggtitle("xrn4 sRNA up") + ylab("sRNA count") + xlab("sRNA size")
+```
+#dcp2
+##Import lists of deregulated sRNA loci in different genotypes and add shortstack info
+```{r 'import upregulated loci'}
+dcp2_up<-fread("/Users/dgarcia/Labo_IBMP/Sequencing/RNA-seq2021_its1_dne1/S21217_siRNAseq/siRNAseq_analysis/DEseq2/sRNAseq_corrected/dcp2_up.csv")
+dcp2_down<-fread("/Users/dgarcia/Labo_IBMP/Sequencing/RNA-seq2021_its1_dne1/S21217_siRNAseq/siRNAseq_analysis/DEseq2/sRNAseq_corrected/dcp2_down.csv")
+```
+
+```{r}
+#create a new column type to assign each annotation to gene etc for each subsets
+
+dcp2[Name %in% genes$gene_id, type := "gene"]
+dcp2[Name %in% te$gene_id, type := "TE"]
+dcp2[Name %in% pseudo$gene_id, type := "pseudogene"]
+dcp2[Name %in% mirna$gene_id, type := "miRNA"]
+```
+
+
+
+```{r 'select loci up in xrn4 with shortstack data'}
+dcp2_up_shortstack <- dplyr::select(dcp2[Name %in% dcp2_up$dcp2_up,], Name, Length, Reads, DicerCall, "20", "21", "22", "23", "24", type)
+dcp2_down_shortstack <- dplyr::select(dcp2[Name %in% dcp2_down$dcp2_down,], Name, Length, Reads, DicerCall, "20", "21", "22", "23", "24", type)
+```
+
+
+```{r}
+ggplot(dcp2_up_shortstack, aes(x = DicerCall)) + geom_density()
+ggplot(dcp2_down_shortstack, aes(x = DicerCall)) + geom_density()
+```
+
+```{r}
+ggplot(dcp2_up_shortstack, aes(x = DicerCall)) + geom_histogram() + ggtitle("dcp2 sRNA up") + ylab("sRNA count")
+ggplot(dcp2_down_shortstack, aes(x = DicerCall)) + geom_histogram() + ggtitle("dcp2 sRNA down") + ylab("sRNA count")
+```
+
+
+#different types of annotations for dcp2 lists sRNA
+```{r}
+# [, = selectionner toutes les lignes .N = nombre d'observation , by=type pour selectionner par type
+count_dcp2_up <- dcp2_up_shortstack[, .(count = .N), by = type]
+ggplot(count_dcp2_up, aes(x = type, y = count, fill = type)) + geom_col() + theme_bw() + ggtitle("dcp2 sRNA up") + ylab("sRNA count") + xlab("type")
+
+count_dcp2_down <- dcp2_down_shortstack[, .(count = .N), by = type]
+ggplot(count_dcp2_down, aes(x = type, y = count, fill = type)) + geom_col() + theme_bw() + ggtitle("dcp2 sRNA down") + ylab("sRNA count") + xlab("type")
+```
+
+#make tmp intermediate with 1column and column to melt + use melt() function to produce a table in the long format compatible with ggplot
+
+```{r}
+dcp2_up_tmp <- dplyr::select(dcp2_up_shortstack, "type", "20", "21", "22", "23", "24")
+dcp2_up_tmp.m <- data.table::melt(dcp2_up_tmp, variable.name = "size_sRNA", value.name =  "count_sRNA")
+dcp2_down_tmp <- dplyr::select(dcp2_down_shortstack, "type", "20", "21", "22", "23", "24")
+dcp2_down_tmp.m <- data.table::melt(dcp2_down_tmp, variable.name = "size_sRNA", value.name =  "count_sRNA")
+```
+
+#use ggplot to produce graphs showing the data
+```{r, log2(number of sRNAs per sizes) for dcp2 dereg loci }
+ggplot(dcp2_down_tmp.m, aes(size_sRNA, log2(count_sRNA + 1), fill = size_sRNA)) + geom_boxplot()+ ggtitle("dcp2 sRNA down") + ylab("log2 (sRNA count + 1)") + xlab("sRNA size")
+
+ggplot(dcp2_up_tmp.m, aes(size_sRNA, log2(count_sRNA + 1), fill = size_sRNA)) + geom_boxplot()+ ggtitle("dcp2 sRNA up") + ylab("log2 (sRNA count + 1)") + xlab("sRNA size")
+```
+
+
+```{r}
+ggplot(dcp2_down_tmp.m, aes(log2(count_sRNA +1), color = size_sRNA)) + geom_density()  + ggtitle("dcp2 sRNA down")
+ggplot(dcp2_up_tmp.m, aes(log2(count_sRNA +1), color = size_sRNA)) + geom_density() + ggtitle("dcp2 sRNA up")
+```
+
+
+```{r}
+dcp2_down_tmp.1 <- dcp2_down_tmp.m[, .(sum = sum(count_sRNA)), by = c("size_sRNA", "type")]
+dcp2_up_tmp.1 <- dcp2_up_tmp.m[, .(sum = sum(count_sRNA)), by = c("size_sRNA", "type")]
+
+ggplot(dcp2_down_tmp.1, aes(x = size_sRNA, y = sum, fill = size_sRNA)) + geom_col(position = "dodge") + theme_bw()+ ggtitle("dcp2 sRNA down") + ylab("sRNA count") + xlab("sRNA size")
+ggplot(dcp2_up_tmp.1, aes(x = size_sRNA, y = sum, fill = size_sRNA)) + geom_col(position = "dodge") + theme_bw()+ ggtitle("dcp2 sRNA up") + ylab("sRNA count") + xlab("sRNA size")
+
+```
+
+```{r}
+ggplot(dcp2_down_tmp.1, aes(x = size_sRNA, y = sum, fill = size_sRNA)) + geom_col(position = "dodge") + theme_bw() + facet_wrap(~type, ncol  =4) + ggtitle("dcp2 sRNA down") + ylab("sRNA count") + xlab("sRNA size")
+ggplot(dcp2_up_tmp.1, aes(x = size_sRNA, y = sum, fill = size_sRNA)) + geom_col(position = "dodge") + theme_bw() + facet_wrap(~type, ncol  =4) + ggtitle("dcp2 sRNA up") + ylab("sRNA count") + xlab("sRNA size")
+```
+
+#dne1 dcp2 NOT DONE YET
+##Import lists of deregulated sRNA loci in different genotypes and add shortstack info

@@ -1,0 +1,15 @@
+Status	DNGC49.sorted.bam	DNGC50.sorted.bam	DNGC51.sorted.bam	DNGC52.sorted.bam	DNGC53.sorted.bam	DNGC54.sorted.bam	DNGC55.sorted.bam	DNGC56.sorted.bam	DNGC57.sorted.bam	DNGC58.sorted.bam	DNGC59.sorted.bam	DNGC60.sorted.bam	DNGC61.sorted.bam	DNGC62.sorted.bam	DNGC63.sorted.bam	DNGC64.sorted.bam	DNGC65.sorted.bam	DNGC66.sorted.bam	DNGC67.sorted.bam	DNGC68.sorted.bam	DNGC69.sorted.bam
+Assigned	45514374	56155595	48305998	49064865	51736597	61551817	52348912	53701495	42050949	57328815	52480940	53761546	47496520	51905230	56858347	52926322	54747384	49333467	51741018	49315176	57974807
+Unassigned_Unmapped	707046	791314	688791	879940	950714	1020151	872304	792991	679640	789564	895797	677280	568973	766920	777748	867227	660662	600235	734702	827272	918720
+Unassigned_Read_Type	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_Singleton	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_MappingQuality	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_Chimera	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_FragmentLength	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_Duplicate	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_MultiMapping	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_Secondary	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_NonSplit	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_NoFeatures	1858281	1771938	1341584	2101530	1363154	1427483	2229364	1250433	792798	1175001	1247203	1049534	968221	1305552	1336782	1370355	3776146	2287057	1641608	1699795	1710709
+Unassigned_Overlapping_Length	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+Unassigned_Ambiguity	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0

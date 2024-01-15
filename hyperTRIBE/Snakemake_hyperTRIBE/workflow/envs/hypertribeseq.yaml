@@ -1,0 +1,15 @@
+name: hypertribeseq
+channels:
+    - conda-forge
+    - bioconda
+    - defaults
+dependencies:
+    - pip
+    - perl>=5.32
+    - perl-getopt-long
+    - fastqc
+    - samtools>=1.14
+    - bcftools>=1.14
+    - hisat2>=2.2.1
+    - seqkit
+    - parallel

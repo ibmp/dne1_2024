@@ -1,0 +1,1 @@
+featureCounts -O -s 2 -T 4 -t mRNA -g transcript_id -a ../../../ressources/TAIR10_annotations/TAIR10_GFF3_genes.clean.gff3 -o RNAseq_TAIR10.gene_models.featureCounts.txt *.sorted.bam
